@@ -1,0 +1,20 @@
+Should we sign-then-encrypt, or encrypt-then-sign?
+QUESTION
+We often want to send messages that are both (a) encrypted, so passive attackers can't discover the plaintext of the message, and (b) signed with a private-key digital signature, so active attackers can't trick Alice into thinking that some message came from Bob, when really the message is some (accidental or malicious) modification of a real message Bob sent, or a message that was forged out of whole cloth by an attacker.
+
+Is it better to (a) generate the digital signature from the (hashed) plaintext, and then encrypt a file containing both the plaintext message and the digital signature? Or is it better to (b) encrypt the message first, and then generate a digital signature from the (hashed) encrypted file? Or (c) combine encryption and public-key digital signatures in some other way?
+
+A closely related earlier question ( Should we MAC-then-encrypt or encrypt-then-MAC? ) seems to focus on symmetric-key MAC authentication. As Robert I. Jr. asked earlier, Do the same issues with (symmetric-key) MAC-then-encrypt apply to (public-key) sign-then-encrypt?
+
+ANSWER:
+Assuming you are asking about public-key signatures + public-key encryption:
+
+Short answer: I recommend sign-then-encrypt, but prepend the recipient's name to the message first.
+
+Long answer: When Alice wants to send an authenticated message to Bob, she should sign and encrypt the message. In particular, she prepends Bob's name to the message, signs this using her private key, appends her signature to the message, encrypts the whole thing under Bob's public key, and sends the resulting ciphertext to Bob. Bob can decrypt, verify the signature, and confirm that this indeed came from Alice (or someone she shared her private key with). Make sure you use an IND-CCA2-secure public-key encryption scheme and a UF-CMA-secure public-key signature scheme (i.e., one that is secure against existential forgery attack).
+
+Justification: The reason to do this is to defeat some subtle attacks. These attacks are not necessarily a problem in all scenarios, but it's best to harden the approach as much as possible. A complete explanation would take more space than is available here, but see below for a sketch of the reasoning.
+
+For a detailed analysis about whether to sign first or encrypt first, the following is a good resource: Defective Sign & Encrypt in S/MIME, PKCS#7, MOSS, PEM, PGP, and XML.
+
+I don't recommend encrypt-then-sign. It could work, but it has some subtle pitfalls in some contexts, because the signature does not prove that the sender was aware of the context of the plaintext. For instance, suppose Alice's SSH client sends the message "Dear SSH server, please append my public key to /root/.ssh/authorized_keys -- and you can know that I am authorized because I know the root password is lk23jas0" (encrypted then signed with Alice's public key), and the SSH server acts on it if the root password is correct. Then Eve can eavesdrop, capture this message, strip off Alice's signature, sign the ciphertext with Eve's own key, and send it to the SSH server, obtaining root-level access even though Eve didn't know the root password.
